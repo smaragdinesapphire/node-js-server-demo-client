@@ -1,5 +1,5 @@
 {
-  "name": "client",
+  "name": "node-js-server-demo-client",
   "version": "1.0.0",
   "private": true,
   "scripts": {
