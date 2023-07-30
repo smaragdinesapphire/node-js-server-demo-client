@@ -1,7 +1,7 @@
 import Head from "next/head";
 import { Inter } from "next/font/google";
 import styles from "@/styles/Home.module.css";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "antd";
 import { Space } from "antd";
 import axios from "axios";
@@ -12,6 +12,7 @@ const inter = Inter({ subsets: ["latin"] });
 const SEND_DATA = { name: "John", age: 30 };
 export default function Home() {
   const wsRef = useRef();
+  const [status, setStatus] = useState(WebSocket.CLOSED);
 
   const handleSaveByWS = useCallback(() => {
     wsRef.current.send(JSON.stringify({ type: "save", data: SEND_DATA }));
@@ -21,43 +22,62 @@ export default function Home() {
     wsRef.current.send(JSON.stringify({ type: "load" }));
   }, []);
 
+  const handleRefreshByWS = useCallback(() => {
+    wsRef.current.send(JSON.stringify({ type: "refresh" }));
+  }, []);
+
   useEffect(() => {
     const ws = new WebSocket("ws://localhost:8080");
-
+    setStatus(WebSocket.CONNECTING);
     ws.onopen = () => {
+      setStatus(WebSocket.OPEN);
       console.log("WebSocket connection opened.");
     };
-
     ws.onmessage = (event) => {
       console.log("Received message from server:", event.data);
     };
 
     ws.onclose = () => {
+      setStatus(WebSocket.CLOSED);
       console.log("WebSocket connection closed.");
     };
     wsRef.current = ws;
 
     return () => {
       ws.close();
+      setStatus(WebSocket.CLOSING);
     };
   }, []);
 
-  const handleSaveByAxios = useCallback(() => {
-    axios
-      .post("http://localhost:8080/save", SEND_DATA)
-      .then(() => notification.success())
-      .catch(() => notification.error());
-  }, []);
+  const handleSaveByAxios = useCallback(
+    () =>
+      axios
+        .post("http://localhost:8080/save", SEND_DATA)
+        .then(() => notification.success({ message: "Success" }))
+        .catch((e) => notification.error({ message: e.message })),
+    []
+  );
 
   const handleLoadByAxios = useCallback(
     () =>
       axios
         .get("http://localhost:8080/load")
-        .then(({ data }) => console.log("success", data))
-        .catch((e) => notification.error()),
+        .then(({ data }) => {
+          console.log("success", data);
+          notification.success({ message: "Success" });
+        })
+        .catch((e) => notification.error({ message: e.message })),
     []
   );
-
+  const statusStr = useMemo(() => {
+    const map = {
+      [WebSocket.OPEN]: "Connected",
+      [WebSocket.CLOSED]: "Disconnected",
+      [WebSocket.CONNECTING]: "Connecting",
+      [WebSocket.CLOSING]: "Disconnecting",
+    };
+    return map[status];
+  }, [status]);
   return (
     <>
       <Head>
@@ -68,9 +88,25 @@ export default function Home() {
       </Head>
       <main className={`${styles.main} ${inter.className}`}>
         <Space>
-          <span>WebSocket</span>
-          <Button onClick={() => handleSaveByWS()}>Save</Button>
-          <Button onClick={() => handleLoadByWS()}>Load</Button>
+          <span>{`WebSocket(${statusStr})`}</span>
+          <Button
+            disabled={status !== WebSocket.OPEN}
+            onClick={() => handleSaveByWS()}
+          >
+            Save
+          </Button>
+          <Button
+            disabled={status !== WebSocket.OPEN}
+            onClick={() => handleLoadByWS()}
+          >
+            Load
+          </Button>
+          <Button
+            disabled={status !== WebSocket.OPEN}
+            onClick={() => handleRefreshByWS()}
+          >
+            Refresh
+          </Button>
         </Space>
         <Space>
           <span>Axios</span>
